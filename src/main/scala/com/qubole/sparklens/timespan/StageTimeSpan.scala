@@ -71,6 +71,7 @@ class StageTimeSpan(val stageID: Int, numberOfTasks: Long) extends TimeSpan {
     tempTaskTimes.sortWith(( left, right)  => left._1 < right._1)
       .foreach( x => {
         taskExecutionTimes( currentIndex) = x._2.toInt
+        // FIXME: [Scala] Is the order reliable inside `foreach`?
         currentIndex += 1
       })
 

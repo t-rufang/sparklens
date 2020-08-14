@@ -70,6 +70,8 @@ class JobOverlapAnalyzer extends  AppAnalyzer {
         }
 
         if (lastEndTime != 0) {
+          // Sort groups by each group's min start time. If end time of the previous group is larger than start time of
+          // the current group, it indicates there might be overlap between previous group and current group.
           if (lastEndTime > minStartTime) {
             conflictingJobGroups += ((count, count-1))
           }

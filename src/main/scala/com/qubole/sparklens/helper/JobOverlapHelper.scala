@@ -28,6 +28,8 @@ object JobOverlapHelper {
       mergedJobGroupList.append(elem)
     }
 
+    // Some jobs might have no sqlExecID, these jobs will be made as a single list separately
+    // Why some jobs have no sqlExecID?
     for (elem <- leftJobIDs) {
       val jobTimeSpan = ac.jobMap(elem)
       val singleItemList = new ListBuffer[JobTimeSpan]
@@ -66,6 +68,8 @@ object JobOverlapHelper {
       if (tempList.isEmpty) {
         tempList.append(job)
       } else {
+        //FIXME: if two adjacent job time span is not crossed, we think the latter one depends on the former one
+        // Is this reliable? Do we have something like job dependency graph in Spark?
         if (tempList.last.endTime < job.startTime) {
           //serial
           newList.append(tempList.toList)

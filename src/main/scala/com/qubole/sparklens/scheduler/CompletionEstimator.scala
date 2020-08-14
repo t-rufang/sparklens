@@ -48,6 +48,7 @@ case class EstimatorState(val stagesData:Map[Int,(Array[Int], Seq[Int])]) {
 
 object CompletionEstimator {
   private def scheduleStage(stageID: Int, estate :EstimatorState, scheduler: PQParallelStageScheduler): Unit = {
+    // Map: stage ID -> (task exec time list, parent stage ID list)
     val stageData = estate.stagesData.getOrElse(stageID, (Array.emptyIntArray, List.empty[Int]))
     if (stageData._1.length > 0) {
       if (stageData._2.isEmpty) {
@@ -62,6 +63,7 @@ object CompletionEstimator {
             scheduleStage(parentStage, estate, scheduler)
           })
         }else {
+          // no defined parents
           estate.runnableStages += stageID
         }
       }
@@ -82,6 +84,8 @@ object CompletionEstimator {
         val copyOfRunningStages = estate.runnableStages.clone()
         val eligibleStages = copyOfRunningStages.filterNot(stageID => estate.runningStages.contains(stageID))
         if (eligibleStages.size > 0) {
+          // Each time select a runnable stage(stage with no dependencies), iterate on all the tasks and put them into
+          // the task queue one by one. If task queue is full, deque a task then put the new task in.
           val currentStageID = eligibleStages.toList(0)
           estate.runningStages += currentStageID
           estate.runnableStages -= currentStageID
@@ -166,7 +170,10 @@ object CompletionEstimator {
     //Here we combine the data from all the parallel jobs. Scheduler takes the information about stages, time spent in
     //each task and the depedency between stages. This information is added to one data structure, but instead of
     //coming from just one job, we give data from all the parallel jobs
+    // Is it possible that two stages in two different jobs share the same stage ID?
+    // Map: stage ID -> (task exec time list, parent stage ID list)
     val data = realJobTimeSpans.flatMap(x => x.stageMap.map(x => (x._1, ( x._2.taskExecutionTimes, x._2.parentStageIDs)))).toMap
+    // Map: stage ID -> task count
     val taskCountMap = new mutable.HashMap[Int, Int]()
     data.foreach( x => {
       taskCountMap(x._1) = x._2._1.length
@@ -186,6 +193,7 @@ object CompletionEstimator {
     //finds the list of runnable stages by traversing the dependency graph. We need to do this for all the jobs, since
     //multiple stages from different jobs can be runnable, given the parallel nature of jobs
     realJobTimeSpans.map (x => x.stageMap.map(x => x._1).max).foreach( maxStageID => {
+      // Initialize estate: put stages into waitingStages and runnableStages
       scheduleStage(maxStageID, estate, scheduler)
     })
 
@@ -238,6 +246,7 @@ object CompletionEstimator {
     // jobs that are part of the group
     val jobTime  = JobOverlapHelper.estimatedTimeSpentInJobs(ac)
     val driverTimeJobBased = appTotalTime - jobTime
+    // Jobs in one group are running in parallel, different groups are running sequentially
     jobGroupsList.map(x => {
         estimateJobListWallClockTime(x,
           executorCount,

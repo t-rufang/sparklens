@@ -39,12 +39,15 @@ class EfficiencyStatisticsAnalyzer extends  AppAnalyzer {
      * We are taking the max-number of executors running at any point of time, and
      * multiplying it by num-cores per executor (assuming homogenous cluster)
      */
+    // Maximum number of executors that run in parallel
     val maxExecutors = AppContext.getMaxConcurrent(ac.executorMap, ac)
+    // Number of cores in single executor
     val executorCores = AppContext.getExecutorCores(ac)
     val totalCores = executorCores * maxExecutors
 
     // total compute millis available to the application
     val appComputeMillisAvailable = totalCores * appTotalTime
+    // Total core time
     val computeMillisFromExecutorLifetime = ac.executorMap.map( x => {
         val ecores = x._2.cores
         val estartTime = Math.max(startTime, x._2.startTime)
@@ -71,9 +74,11 @@ class EfficiencyStatisticsAnalyzer extends  AppAnalyzer {
     val inJobComputeMillisUsed  = ac.jobMap.values
       .filter(x => x.endTime > 0)
       .filter(x => x.jobMetrics.map.isDefinedAt(AggregateMetrics.executorRuntime))
+      // AggregateMetrics.executorRuntime is calculated by sum of executorRuntime for all tasks
       .map(x => x.jobMetrics.map(AggregateMetrics.executorRuntime).value)
       .sum
 
+    // Assume that all the cores are used all the time, no core is in idle state all the time
     val perfectJobTime  = inJobComputeMillisUsed/totalCores
     //Enough variables lets print some
 

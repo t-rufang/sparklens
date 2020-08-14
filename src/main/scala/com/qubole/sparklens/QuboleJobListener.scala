@@ -162,7 +162,8 @@ class QuboleJobListener(sparkConf: SparkConf)  extends SparkListener {
           if (!x._2.stageMap.isEmpty) {
             jobMap(x._1).setEndTime(x._2.stageMap.map(y => y._2.endTime).max)
           }else {
-            //no stages? set it to endTime of the app
+            //FIXME: If there is no stages, we set it to endTime of the app. Is this a reasonable estimation?
+            // Maybe we should warn cx that here is an exception?
             jobMap(x._1).setEndTime(appInfo.endTime)
           }
         }
@@ -201,6 +202,10 @@ class QuboleJobListener(sparkConf: SparkConf)  extends SparkListener {
       timeSpan.setStartTime(executorAdded.time)
        executorMap(executorAdded.executorId) = timeSpan
     }
+    // FIXME: What if multiple executors are allocated into one host? Is it possible?
+    // Seems like it's possible that multiple executors can run on one host. https://stackoverflow.com/a/30020783
+    // Therefore, we should define hostMap as
+    // protected val hostMap          = new mutable.HashMap[String, util.ArrayList[HostTimeSpan]]()
     val hostTimeSpan = hostMap.get(executorAdded.executorInfo.executorHost)
     if (!hostTimeSpan.isDefined) {
       val executorHostTimeSpan = new HostTimeSpan(executorAdded.executorInfo.executorHost)
@@ -220,6 +225,7 @@ class QuboleJobListener(sparkConf: SparkConf)  extends SparkListener {
     jobTimeSpan.setStartTime(jobStart.time)
     jobMap(jobStart.jobId) = jobTimeSpan
     jobStart.stageIds.foreach( stageID => {
+      // FIXME: One stage belong to only one job. This is a bug?
       stageIDToJobID(stageID) = jobStart.jobId
     })
     val sqlExecutionID = jobStart.properties.getProperty("spark.sql.execution.id")

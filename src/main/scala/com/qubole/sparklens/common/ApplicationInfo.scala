@@ -32,6 +32,7 @@ case class ApplicationInfo (var applicationID:String = "NA",
 object ApplicationInfo {
 
   def getObject(jvalue: JValue): ApplicationInfo = {
+    // Why do we need this formats?
     implicit val formats = DefaultFormats
 
     ApplicationInfo(

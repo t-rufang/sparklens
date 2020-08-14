@@ -45,6 +45,8 @@ class ExecutorTimelineAnalyzer extends  AppAnalyzer {
         minuteLists._1 += x
         if (x.endTime != 0) {
           val endMinute = MINUTES_DF.format(x.endTime)
+          // FIXME: Should replace `getOrElse` with `getOrElseUpdate`
+          // Basically endTime didn't get updated in minuteExecutorMap
           val minuteEndList = minuteExecutorMap.getOrElse(endMinute, (new mutable.ListBuffer[ExecutorTimeSpan](), new mutable.ListBuffer[ExecutorTimeSpan]()))
           minuteEndList._2 += x
         }
