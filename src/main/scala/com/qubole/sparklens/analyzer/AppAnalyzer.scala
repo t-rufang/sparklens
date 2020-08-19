@@ -84,6 +84,7 @@ object AppAnalyzer {
     list += new EfficiencyStatisticsAnalyzer
     list += new ExecutorWallclockAnalyzer
     list += new StageSkewAnalyzer
+    list += new CriticalPathAnalyzer
 
 
     list.foreach( x => {
