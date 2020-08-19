@@ -12,13 +12,13 @@ sparkVersion := "2.4.4-SNAPSHOT"
 spAppendScalaVersion := true
 
 
-libraryDependencies += "org.apache.spark" %% "spark-core" % sparkVersion.value
+libraryDependencies += "org.apache.spark" %% "spark-core" % sparkVersion.value % "provided"
 
-libraryDependencies +=  "org.apache.hadoop" % "hadoop-client" % "2.6.5"
+libraryDependencies +=  "org.apache.hadoop" % "hadoop-client" % "2.6.5" % "provided"
 
-libraryDependencies += "org.apache.httpcomponents" % "httpclient" % "4.5.6"
+libraryDependencies += "org.apache.httpcomponents" % "httpclient" % "4.5.6" % "provided"
 
-libraryDependencies += "org.apache.httpcomponents" % "httpmime" % "4.5.6"
+libraryDependencies += "org.apache.httpcomponents" % "httpmime" % "4.5.6" % "provided"
 
 test in assembly := {}
 
