@@ -7,18 +7,18 @@ crossScalaVersions := Seq("2.10.6", "2.11.8")
 
 spName := "qubole/sparklens"
 
-sparkVersion := "2.0.0"
+sparkVersion := "2.4.4-SNAPSHOT"
 
 spAppendScalaVersion := true
 
 
-libraryDependencies += "org.apache.spark" %% "spark-core" % sparkVersion.value % "provided"
+libraryDependencies += "org.apache.spark" %% "spark-core" % sparkVersion.value
 
-libraryDependencies +=  "org.apache.hadoop" % "hadoop-client" % "2.6.5" % "provided"
+libraryDependencies +=  "org.apache.hadoop" % "hadoop-client" % "2.6.5"
 
-libraryDependencies += "org.apache.httpcomponents" % "httpclient" % "4.5.6" % "provided"
+libraryDependencies += "org.apache.httpcomponents" % "httpclient" % "4.5.6"
 
-libraryDependencies += "org.apache.httpcomponents" % "httpmime" % "4.5.6" % "provided"
+libraryDependencies += "org.apache.httpcomponents" % "httpmime" % "4.5.6"
 
 test in assembly := {}
 
@@ -35,6 +35,7 @@ licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 
 credentials += Credentials(Path.userHome / ".ivy2" / ".sbtcredentials")
 
+resolvers += Resolver.mavenLocal
 
 pomExtra :=
   <url>https://github.com/qubole/sparklens</url>
