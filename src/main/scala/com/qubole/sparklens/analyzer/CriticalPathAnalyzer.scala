@@ -16,27 +16,35 @@
 */
 package com.qubole.sparklens.analyzer
 import com.qubole.sparklens.common.AppContext
-import com.qubole.sparklens.timespan.{JobTimeSpan, TimeSpan}
+import com.qubole.sparklens.timespan.{JobTimeSpan, StageTimeSpan, TimeSpan}
 
 import scala.collection.mutable
 
 class CriticalPathAnalyzer extends AppAnalyzer {
   override def analyze(appContext: AppContext, startTime: Long, endTime: Long): String = {
     val ac = appContext.filterByStartAndEndTime(startTime, endTime)
-    val jobLevelCriticalPath: Array[JobTimeSpan] = findDependentPath(ac.jobMap.values.toArray)
+    val jobLevelCriticalPath = findCriticalPath(ac.jobMap.values.toArray)
     val out = new mutable.StringBuilder()
-    out.println("\nCritical path analysis\n")
-    out.println("Critical path in job level:")
-    jobLevelCriticalPath.foreach(job => out.println(s"Job ${job.jobID}\tStart time: ${job.startTime}.\tEnd time: ${job.endTime}.\tDuration: ${job.duration().getOrElse("")}"))
+    out.println("\nCritical path analysis")
+    out.println("\nCritical path in job level:")
+    printTimeSpans(out, jobLevelCriticalPath)
+
+    out.println("\nCritical path in stage level:")
+    jobLevelCriticalPath.foreach(timeSpan => {
+      val jobTimeSpan = timeSpan.asInstanceOf[JobTimeSpan]
+      val stageLevelCriticalPath = findCriticalPath(jobTimeSpan.stageMap.values.toArray)
+      out.println(s"Critical path in stage level for job ${jobTimeSpan.jobID}:")
+      printTimeSpans(out, stageLevelCriticalPath)
+    })
     out.toString()
   }
 
-  def findDependentPath(timeSpans: Array[JobTimeSpan]): Array[JobTimeSpan] = {
+  def findCriticalPath(timeSpans: Array[TimeSpan]): Array[TimeSpan] = {
     val sortByEndTimeSpans = timeSpans.sortWith((a, b) => a.endTime <= b.endTime)
     var currentIndex = sortByEndTimeSpans.length - 1
-    val resultStack = new mutable.ArrayStack[JobTimeSpan]()
+    val resultStack = new mutable.ArrayStack[TimeSpan]()
     while (currentIndex >= 0) {
-      if (resultStack.isEmpty || earlyThan(sortByEndTimeSpans(currentIndex), resultStack.top)) {
+      if (resultStack.isEmpty || atLeft(sortByEndTimeSpans(currentIndex), resultStack.top)) {
         resultStack.push(sortByEndTimeSpans(currentIndex))
       }
       currentIndex = currentIndex - 1
@@ -44,7 +52,25 @@ class CriticalPathAnalyzer extends AppAnalyzer {
     resultStack.toArray   // stack.top will become the first element in the array
   }
 
-  def earlyThan(firstTime: TimeSpan, secondTime: TimeSpan): Boolean = {
+  /**
+   * Print the formatted output for critical path in different level
+   * @param timeSpans time spans which constitute the critical path
+   */
+  def printTimeSpans(out: mutable.StringBuilder, timeSpans: Array[TimeSpan]): Unit = {
+    timeSpans.foreach(timeSpan => {
+      timeSpan match {
+        case span: JobTimeSpan =>
+          out.print(s"Job ${span.jobID}\t")
+        case span: StageTimeSpan => {
+          out.print(s"Stage ${span.stageID}\t")
+        }
+      }
+      out.println(s"Start time: ${timeSpan.startTime}.\tEnd time: ${timeSpan.endTime}." +
+        s"\tDuration: ${timeSpan.duration().getOrElse("")}")
+    })
+  }
+
+  def atLeft(firstTime: TimeSpan, secondTime: TimeSpan): Boolean = {
     firstTime.endTime <= secondTime.startTime
   }
 }
