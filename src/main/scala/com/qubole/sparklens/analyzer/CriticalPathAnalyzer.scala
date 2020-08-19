@@ -65,8 +65,8 @@ class CriticalPathAnalyzer extends AppAnalyzer {
           out.print(s"Stage ${span.stageID}\t")
         }
       }
-      out.println(s"Start time: ${timeSpan.startTime}.\tEnd time: ${timeSpan.endTime}." +
-        s"\tDuration: ${timeSpan.duration().getOrElse("")}")
+      out.println(s"Start time: ${pt(timeSpan.startTime)}.\tEnd time: ${pt(timeSpan.endTime)}." +
+        s"\tDuration: ${pd(timeSpan.duration().getOrElse(0))}")
     })
   }
 
