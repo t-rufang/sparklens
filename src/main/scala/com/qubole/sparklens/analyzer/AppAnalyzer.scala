@@ -76,14 +76,6 @@ trait AppAnalyzer {
 object AppAnalyzer {
   def startAnalyzers(appContext: AppContext): Unit = {
     val list = new ListBuffer[AppAnalyzer]
-    list += new SimpleAppAnalyzer
-    list += new HostTimelineAnalyzer
-    list += new ExecutorTimelineAnalyzer
-    list += new AppTimelineAnalyzer
-    list += new JobOverlapAnalyzer
-    list += new EfficiencyStatisticsAnalyzer
-    list += new ExecutorWallclockAnalyzer
-    list += new StageSkewAnalyzer
     list += new CriticalPathAnalyzer
 
 

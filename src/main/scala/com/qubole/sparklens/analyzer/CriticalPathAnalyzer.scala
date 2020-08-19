@@ -33,7 +33,7 @@ class CriticalPathAnalyzer extends AppAnalyzer {
     jobLevelCriticalPath.foreach(timeSpan => {
       val jobTimeSpan = timeSpan.asInstanceOf[JobTimeSpan]
       val stageLevelCriticalPath = findCriticalPath(jobTimeSpan.stageMap.values.toArray)
-      out.println(s"Critical path in stage level for job ${jobTimeSpan.jobID}:")
+      out.println(s"Critical path for job ${jobTimeSpan.jobID}:")
       printTimeSpans(out, stageLevelCriticalPath)
     })
     out.toString()
@@ -60,13 +60,13 @@ class CriticalPathAnalyzer extends AppAnalyzer {
     timeSpans.foreach(timeSpan => {
       timeSpan match {
         case span: JobTimeSpan =>
-          out.print(s"Job ${span.jobID}\t")
+          out.print(f"Job ${span.jobID}%3s    ")
         case span: StageTimeSpan => {
-          out.print(s"Stage ${span.stageID}\t")
+          out.print(f"Stage ${span.stageID}%3s    ")
         }
       }
-      out.println(s"Start time: ${pt(timeSpan.startTime)}.\tEnd time: ${pt(timeSpan.endTime)}." +
-        s"\tDuration: ${pd(timeSpan.duration().getOrElse(0))}")
+      out.println(s"Start time: ${pt(timeSpan.startTime)}    End time: ${pt(timeSpan.endTime)}" +
+        s"    Duration: ${pd(timeSpan.duration().getOrElse(0))}")
     })
   }
 
