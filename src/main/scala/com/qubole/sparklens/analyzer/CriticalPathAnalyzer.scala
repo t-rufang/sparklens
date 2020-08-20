@@ -14,55 +14,77 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
+
 package com.qubole.sparklens.analyzer
 import com.qubole.sparklens.common.AppContext
-import com.qubole.sparklens.timespan.{JobTimeSpan, StageTimeSpan, TimeSpan}
+import com.qubole.sparklens.timespan.{JobTimeSpan, StageTimeSpan, TaskTimeSpan, TimeSpan}
 
 import scala.collection.mutable
 
 class CriticalPathAnalyzer extends AppAnalyzer {
   override def analyze(appContext: AppContext, startTime: Long, endTime: Long): String = {
     val ac = appContext.filterByStartAndEndTime(startTime, endTime)
-    val jobLevelCriticalPath = findCriticalPath(ac.jobMap.values.toArray)
+    var jobLevelCriticalPath: List[JobTimeSpan] = List.empty
+    var stageLevelCriticalPath: List[StageTimeSpan] = List.empty
+    var taskLevelCriticalPath: List[TaskTimeSpan] = List.empty
+
+    jobLevelCriticalPath = findCriticalPath(ac.jobMap.values.toList)
     val out = new mutable.StringBuilder()
     out.println("\nCritical path analysis")
     out.println("\nCritical path in job level:")
     printTimeSpans(out, jobLevelCriticalPath)
 
     out.println("\nCritical path in stage level:")
-    jobLevelCriticalPath.foreach(timeSpan => {
-      val jobTimeSpan = timeSpan.asInstanceOf[JobTimeSpan]
-      val stageLevelCriticalPath = findCriticalPath(jobTimeSpan.stageMap.values.toArray)
+    jobLevelCriticalPath.foreach(jobTimeSpan => {
+      val currentJobCriticalPath = findCriticalPath(jobTimeSpan.stageMap.values.toList)
       out.println(s"Critical path for job ${jobTimeSpan.jobID}:")
-      printTimeSpans(out, stageLevelCriticalPath)
+      printTimeSpans(out, currentJobCriticalPath)
+
+      stageLevelCriticalPath = stageLevelCriticalPath ++ currentJobCriticalPath
+    })
+
+    out.println("\nCritical path in task level:")
+    stageLevelCriticalPath.foreach(stageTimeSpan => {
+      val allTaskTimeSpans = stageTimeSpan.taskMap.values.toList
+      val lastCompletedTaskExecutorId = allTaskTimeSpans.maxBy(_.endTime).executorId
+      val taskTimeSpans = allTaskTimeSpans.filter(_.executorId == lastCompletedTaskExecutorId)
+      val currentStageCriticalPath = findCriticalPath(taskTimeSpans)
+      val jobID = ac.stageIDToJobID(stageTimeSpan.stageID)
+      out.println(s"Critical path for stage ${stageTimeSpan.stageID}(job ${jobID}, executor ${lastCompletedTaskExecutorId}):")
+      printTimeSpans(out, currentStageCriticalPath)
+
+      taskLevelCriticalPath = taskLevelCriticalPath ++ currentStageCriticalPath
     })
     out.toString()
   }
 
-  def findCriticalPath(timeSpans: Array[TimeSpan]): Array[TimeSpan] = {
+  def findCriticalPath[P <: TimeSpan](timeSpans: List[P]): List[P] = {
     val sortByEndTimeSpans = timeSpans.sortWith((a, b) => a.endTime <= b.endTime)
     var currentIndex = sortByEndTimeSpans.length - 1
-    val resultStack = new mutable.ArrayStack[TimeSpan]()
+    val resultStack = new mutable.ArrayStack[P]()
     while (currentIndex >= 0) {
       if (resultStack.isEmpty || atLeft(sortByEndTimeSpans(currentIndex), resultStack.top)) {
         resultStack.push(sortByEndTimeSpans(currentIndex))
       }
       currentIndex = currentIndex - 1
     }
-    resultStack.toArray   // stack.top will become the first element in the array
+    resultStack.toList   // stack.top will become the first element in the list
   }
 
   /**
    * Print the formatted output for critical path in different level
    * @param timeSpans time spans which constitute the critical path
    */
-  def printTimeSpans(out: mutable.StringBuilder, timeSpans: Array[TimeSpan]): Unit = {
+  def printTimeSpans[P <: TimeSpan](out: mutable.StringBuilder, timeSpans: List[P]): Unit = {
     timeSpans.foreach(timeSpan => {
       timeSpan match {
         case span: JobTimeSpan =>
           out.print(f"Job ${span.jobID}%3s    ")
         case span: StageTimeSpan => {
           out.print(f"Stage ${span.stageID}%3s    ")
+        }
+        case span: TaskTimeSpan => {
+          out.print(f"Task ${span.taskID}%5s    ")
         }
       }
       out.println(s"Start time: ${pt(timeSpan.startTime)}    End time: ${pt(timeSpan.endTime)}" +

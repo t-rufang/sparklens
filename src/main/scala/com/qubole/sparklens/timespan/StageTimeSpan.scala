@@ -31,6 +31,7 @@ This keeps track of data per stage
 
 class StageTimeSpan(val stageID: Int, numberOfTasks: Long) extends TimeSpan {
   var stageMetrics  = new AggregateMetrics()
+  var taskMap = new mutable.HashMap[Long, TaskTimeSpan]()
   var tempTaskTimes = new mutable.ListBuffer[( Long, Long, Long)]
   var minTaskLaunchTime = Long.MaxValue
   var maxTaskFinishTime = 0L
@@ -57,6 +58,12 @@ class StageTimeSpan(val stageID: Int, numberOfTasks: Long) extends TimeSpan {
       if (taskInfo.finishTime > maxTaskFinishTime) {
         maxTaskFinishTime = taskInfo.finishTime
       }
+
+      // Add task to taskMap
+      val taskTimeSpan = new TaskTimeSpan(taskInfo.taskId, taskInfo.executorId)
+      taskTimeSpan.setStartTime(taskInfo.launchTime)
+      taskTimeSpan.setEndTime(taskInfo.finishTime)
+      taskMap (taskInfo.taskId) = taskTimeSpan
     }
   }
 
