@@ -74,10 +74,11 @@ trait AppAnalyzer {
 }
 
 object AppAnalyzer {
+  val criticalPathAnalyzer = new CriticalPathAnalyzer
+
   def startAnalyzers(appContext: AppContext): Unit = {
     val list = new ListBuffer[AppAnalyzer]
-    list += new CriticalPathAnalyzer
-
+    list += criticalPathAnalyzer
 
     list.foreach( x => {
       try {

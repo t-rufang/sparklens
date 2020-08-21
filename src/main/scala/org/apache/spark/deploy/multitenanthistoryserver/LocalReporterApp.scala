@@ -5,6 +5,7 @@ import java.net.URI
 
 import com.ning.compress.lzf.LZFInputStream
 import com.qubole.sparklens.QuboleJobListener
+import com.qubole.sparklens.analyzer.{AppAnalyzer, CriticalPathResult}
 import com.qubole.sparklens.common.Json4sWrapper
 import com.qubole.sparklens.helper.HDFSConfigHelper
 import net.jpountz.lz4.LZ4BlockInputStream
@@ -16,6 +17,7 @@ import org.xerial.snappy.SnappyInputStream
 
 object LocalReporterApp {
   lazy val bus = new ReplayListenerBus
+  var criticalPathResult: Option[CriticalPathResult] = Option.empty
 
   def reportFromEventHistory(eventFile: String): Unit = {
     val sparkConf: SparkConf = new SparkConf
@@ -24,6 +26,12 @@ object LocalReporterApp {
     bus.addListener(quboleSparkListener)
     bus.replay(getDecodedInputStream(eventFile, sparkConf), eventFile, boolean2Boolean(false), getFilter _)
     bus.removeListener(quboleSparkListener)
+
+    updateAnalyzerResult()
+  }
+
+  def updateAnalyzerResult(): Unit = {
+    criticalPathResult = Option(AppAnalyzer.criticalPathAnalyzer.criticalPathResult)
   }
 
   // Borrowed from CompressionCodecs in spark
