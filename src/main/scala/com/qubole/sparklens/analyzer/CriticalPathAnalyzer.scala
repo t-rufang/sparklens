@@ -22,43 +22,47 @@ import com.qubole.sparklens.timespan.{JobTimeSpan, StageTimeSpan, TaskTimeSpan, 
 import scala.collection.mutable
 
 class CriticalPathAnalyzer extends AppAnalyzer {
+  val LONG_RUNNING_TASK_DURATION_LOWER_BOUND = 10000   // Lower time bound for long running tasks (millisecond)
+  val LONG_RUNNING_TASK_SKEW_RATIO = 2   // Task duration skew ratio for long running tasks
+
   override def analyze(appContext: AppContext, startTime: Long, endTime: Long): String = {
     val ac = appContext.filterByStartAndEndTime(startTime, endTime)
-    var jobLevelCriticalPath: List[JobTimeSpan] = List.empty
-    var stageLevelCriticalPath: List[StageTimeSpan] = List.empty
-    var taskLevelCriticalPath: List[TaskTimeSpan] = List.empty
+    // [job ID, critical path for the job]
+    val stageLevelCriticalPath = new mutable.HashMap[Long, List[StageTimeSpan]]
+    // [stage ID, long running tasks for the stage]
+    val LongRunningTasks = new mutable.HashMap[Long, List[TaskTimeSpan]]
 
-    jobLevelCriticalPath = findCriticalPath(ac.jobMap.values.toList)
     val out = new mutable.StringBuilder()
     out.println("\nCritical path analysis")
-    out.println("\nCritical path in job level:")
-    printTimeSpans(out, jobLevelCriticalPath)
-
-    out.println("\nCritical path in stage level:")
-    jobLevelCriticalPath.foreach(jobTimeSpan => {
-      val currentJobCriticalPath = findCriticalPath(jobTimeSpan.stageMap.values.toList)
-      out.println(s"Critical path for job ${jobTimeSpan.jobID}:")
-      printTimeSpans(out, currentJobCriticalPath)
-
-      stageLevelCriticalPath = stageLevelCriticalPath ++ currentJobCriticalPath
+    ac.jobMap.values.toList.sortBy(_.jobID).foreach(jobTimeSpan => {
+      val currentJobCriticalPath = findLongestPathTimeSpans(jobTimeSpan.stageMap.values.toList)
+      if (currentJobCriticalPath.nonEmpty) {
+        out.println(s"Critical path for job ${jobTimeSpan.jobID}:")
+        printTimeSpans(out, currentJobCriticalPath)
+      }
+      stageLevelCriticalPath(jobTimeSpan.jobID) = currentJobCriticalPath
     })
 
-    out.println("\nCritical path in task level:")
-    stageLevelCriticalPath.foreach(stageTimeSpan => {
-      val allTaskTimeSpans = stageTimeSpan.taskMap.values.toList
-      val lastCompletedTaskExecutorId = allTaskTimeSpans.maxBy(_.endTime).executorId
-      val taskTimeSpans = allTaskTimeSpans.filter(_.executorId == lastCompletedTaskExecutorId)
-      val currentStageCriticalPath = findCriticalPath(taskTimeSpans)
-      val jobID = ac.stageIDToJobID(stageTimeSpan.stageID)
-      out.println(s"Critical path for stage ${stageTimeSpan.stageID}(job ${jobID}, executor ${lastCompletedTaskExecutorId}):")
-      printTimeSpans(out, currentStageCriticalPath)
-
-      taskLevelCriticalPath = taskLevelCriticalPath ++ currentStageCriticalPath
+    out.println(
+      s"""
+         |Long running tasks analysis
+         |1) Long running task has duration greater than ${LONG_RUNNING_TASK_DURATION_LOWER_BOUND / 1000}s
+         |2) Long running task has duration greater than ${LONG_RUNNING_TASK_SKEW_RATIO} * average tasks duration in the stage\n""".stripMargin)
+    stageLevelCriticalPath.values.flatten.toList.sortBy(_.stageID).foreach(stageTimeSpan => {
+      val currentStageLongRunningTasks =
+        fineLongRunningTimeSpans(stageTimeSpan.taskMap.values.toList)
+          .filter(taskTimeSpan => taskTimeSpan.duration().get >= LONG_RUNNING_TASK_DURATION_LOWER_BOUND)
+      if (currentStageLongRunningTasks.nonEmpty) {
+        out.println(s"Long running tasks for stage ${stageTimeSpan.stageID}:")
+        printTimeSpans(out, currentStageLongRunningTasks)
+      }
+      LongRunningTasks(stageTimeSpan.stageID) = currentStageLongRunningTasks
     })
+
     out.toString()
   }
 
-  def findCriticalPath[P <: TimeSpan](timeSpans: List[P]): List[P] = {
+  def findLongestPathTimeSpans[P <: TimeSpan](timeSpans: List[P]): List[P] = {
     val sortByEndTimeSpans = timeSpans.sortWith((a, b) => a.endTime <= b.endTime)
     var currentIndex = sortByEndTimeSpans.length - 1
     val resultStack = new mutable.ArrayStack[P]()
@@ -69,6 +73,19 @@ class CriticalPathAnalyzer extends AppAnalyzer {
       currentIndex = currentIndex - 1
     }
     resultStack.toList   // stack.top will become the first element in the list
+  }
+
+  def fineLongRunningTimeSpans[P <: TimeSpan](timeSpans: List[P]): List[P] = {
+    val validTimeSpans = timeSpans.filter(_.duration().isDefined)
+    if (validTimeSpans.isEmpty) {
+      return List.empty
+    }
+
+    val averageDuration = validTimeSpans.map(_.duration().get).sum / (0.0 + validTimeSpans.size)
+    validTimeSpans
+      .filter(taskTimeSpan => taskTimeSpan.duration().get > LONG_RUNNING_TASK_DURATION_LOWER_BOUND
+        && taskTimeSpan.duration().get > LONG_RUNNING_TASK_SKEW_RATIO * averageDuration)
+      .sortWith(_.duration().get > _.duration().get)
   }
 
   /**
