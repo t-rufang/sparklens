@@ -20,6 +20,18 @@ libraryDependencies += "org.apache.httpcomponents" % "httpclient" % "4.5.6" % "p
 
 libraryDependencies += "org.apache.httpcomponents" % "httpmime" % "4.5.6" % "provided"
 
+val jacksonVersion = "2.9.2"
+
+libraryDependencies += "com.fasterxml.jackson.core" % "jackson-annotations" % jacksonVersion % "provided"
+
+libraryDependencies += "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion % "provided"
+
+libraryDependencies += "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion % "provided"
+
+libraryDependencies += "com.fasterxml.jackson.dataformat" % "jackson-dataformat-xml" % jacksonVersion % "provided"
+
+libraryDependencies += "com.fasterxml.jackson.module" % "jackson-module-scala_2.11" % jacksonVersion % "provided"
+
 test in assembly := {}
 
 testOptions in Test += Tests.Argument("-oF")
