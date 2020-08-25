@@ -16,24 +16,30 @@
 */
 
 package com.qubole.sparklens.analyzer
+
 import com.qubole.sparklens.common.AppContext
+import com.qubole.sparklens.helper.JsonHelper
 import com.qubole.sparklens.timespan.{JobTimeSpan, StageTimeSpan, TaskTimeSpan, TimeSpan}
 
 import scala.collection.mutable
 
 case class StageData(stageID: Long, startTime: Long, endTime: Long, duration: Long)
+
+case class CriticalPathData(jobID: Long, stagesData: List[StageData])
+
 case class TaskData(taskID: Long, startTime: Long, endTime: Long, duration: Long)
-// criticalPath: [job ID, critical path for the job]
-// tasks: [stage ID, long running tasks for the stage]
-case class CriticalPathResult(criticalPath: mutable.HashMap[Long, List[StageData]],
-                              tasks: mutable.HashMap[Long, List[TaskData]])
+
+case class LongRunningTasksData(stageID: Long, tasksData: List[TaskData])
+
+case class CriticalPathResult(criticalPath: List[CriticalPathData],
+                              tasks: List[LongRunningTasksData],
+                              criticalPathJsonString: String,
+                              tasksJsonString: String)
 
 class CriticalPathAnalyzer extends AppAnalyzer {
-  val LONG_RUNNING_TASK_DURATION_LOWER_BOUND = 10000   // Lower time bound for long running tasks (millisecond)
-  val LONG_RUNNING_TASK_SKEW_RATIO = 2   // Task duration skew ratio for long running tasks
-  val criticalPathResult = CriticalPathResult(
-    new mutable.HashMap[Long, List[StageData]],
-    new mutable.HashMap[Long, List[TaskData]])
+  val LONG_RUNNING_TASK_DURATION_LOWER_BOUND = 10000 // Lower time bound for long running tasks (millisecond)
+  val LONG_RUNNING_TASK_SKEW_RATIO = 2 // Task duration skew ratio for long running tasks
+  var criticalPathResult = CriticalPathResult(List.empty, List.empty, "", "")
 
   override def analyze(appContext: AppContext, startTime: Long, endTime: Long): String = {
     val ac = appContext.filterByStartAndEndTime(startTime, endTime)
@@ -49,11 +55,6 @@ class CriticalPathAnalyzer extends AppAnalyzer {
         printTimeSpans(out, currentJobCriticalPath)
       }
       stageLevelCriticalPath(jobTimeSpan.jobID) = currentJobCriticalPath
-      criticalPathResult.criticalPath(jobTimeSpan.jobID) = currentJobCriticalPath.map(stageTimeSpan =>
-        StageData(stageTimeSpan.stageID,
-          stageTimeSpan.startTime,
-          stageTimeSpan.endTime,
-          stageTimeSpan.duration().getOrElse(0L)))
     })
 
     out.println(
@@ -62,21 +63,36 @@ class CriticalPathAnalyzer extends AppAnalyzer {
          |1) Long running task has duration greater than ${LONG_RUNNING_TASK_DURATION_LOWER_BOUND / 1000}s
          |2) Long running task has duration greater than ${LONG_RUNNING_TASK_SKEW_RATIO} * average tasks duration in the stage\n""".stripMargin)
     stageLevelCriticalPath.values.flatten.toList.sortBy(_.stageID).foreach(stageTimeSpan => {
-      val currentStageLongRunningTasks =
-        fineLongRunningTimeSpans(stageTimeSpan.taskMap.values.toList)
-          .filter(taskTimeSpan => taskTimeSpan.duration().get >= LONG_RUNNING_TASK_DURATION_LOWER_BOUND)
+      val currentStageLongRunningTasks = findLongRunningTimeSpans(stageTimeSpan.taskMap.values.toList)
       if (currentStageLongRunningTasks.nonEmpty) {
         out.println(s"Long running tasks for stage ${stageTimeSpan.stageID}:")
         printTimeSpans(out, currentStageLongRunningTasks)
       }
       longRunningTasks(stageTimeSpan.stageID) = currentStageLongRunningTasks
-      criticalPathResult.tasks(stageTimeSpan.stageID) = currentStageLongRunningTasks.map(taskTimeSpan =>
+    })
+
+    // Generate critical path result
+    val criticalPaths = stageLevelCriticalPath.map(item => {
+      val jobID = item._1
+      val stagesData = item._2.map(stageTimeSpan =>
+        StageData(stageTimeSpan.stageID,
+          stageTimeSpan.startTime,
+          stageTimeSpan.endTime,
+          stageTimeSpan.duration().getOrElse(0L)))
+      CriticalPathData(jobID, stagesData)
+    }).toList.sortBy(_.jobID)
+    val tasks = longRunningTasks.map(item => {
+      val stageID = item._1
+      val tasksData = item._2.map(taskTimeSpan =>
         TaskData(taskTimeSpan.taskID,
           taskTimeSpan.startTime,
           taskTimeSpan.endTime,
-          taskTimeSpan.duration().getOrElse(0L))
-      )
-    })
+          taskTimeSpan.duration().getOrElse(0L)))
+      LongRunningTasksData(stageID, tasksData)
+    }).toList.sortBy(_.stageID)
+    val criticalPathJsonString = JsonHelper.convertScalaObjectToJsonString(criticalPaths)
+    val tasksJsonString = JsonHelper.convertScalaObjectToJsonString(tasks)
+    criticalPathResult = CriticalPathResult(criticalPaths, tasks, criticalPathJsonString, tasksJsonString)
 
     out.toString()
   }
@@ -91,10 +107,10 @@ class CriticalPathAnalyzer extends AppAnalyzer {
       }
       currentIndex = currentIndex - 1
     }
-    resultStack.toList   // stack.top will become the first element in the list
+    resultStack.toList // stack.top will become the first element in the list
   }
 
-  def fineLongRunningTimeSpans[P <: TimeSpan](timeSpans: List[P]): List[P] = {
+  def findLongRunningTimeSpans[P <: TimeSpan](timeSpans: List[P]): List[P] = {
     val validTimeSpans = timeSpans.filter(_.duration().isDefined)
     if (validTimeSpans.isEmpty) {
       return List.empty
@@ -109,6 +125,7 @@ class CriticalPathAnalyzer extends AppAnalyzer {
 
   /**
    * Print the formatted output for critical path in different level
+   *
    * @param timeSpans time spans which constitute the critical path
    */
   def printTimeSpans[P <: TimeSpan](out: mutable.StringBuilder, timeSpans: List[P]): Unit = {

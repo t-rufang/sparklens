@@ -24,7 +24,7 @@ import com.ning.compress.lzf.LZFInputStream
 import com.qubole.sparklens.QuboleJobListener
 import com.qubole.sparklens.analyzer.{AppAnalyzer, CriticalPathResult}
 import com.qubole.sparklens.common.Json4sWrapper
-import com.qubole.sparklens.helper.{HDFSConfigHelper, JsonHelper}
+import com.qubole.sparklens.helper.HDFSConfigHelper
 import net.jpountz.lz4.LZ4BlockInputStream
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark._
@@ -35,8 +35,6 @@ import org.xerial.snappy.SnappyInputStream
 object LocalReporterApp {
   lazy val bus = new ReplayListenerBus
   var criticalPathResult: Option[CriticalPathResult] = Option.empty
-  var stageLevelCriticalPathJsonString: Option[String] = Option.empty
-  var longRunningTasksJsonString: Option[String] = Option.empty
 
   def reportFromEventHistory(eventFile: String): Unit = {
     val sparkConf: SparkConf = new SparkConf
@@ -47,10 +45,6 @@ object LocalReporterApp {
     bus.removeListener(quboleSparkListener)
 
     criticalPathResult = Option(AppAnalyzer.criticalPathAnalyzer.criticalPathResult)
-    stageLevelCriticalPathJsonString = Option(JsonHelper.convertScalaObjectToJsonString(
-      criticalPathResult.get.criticalPath))
-    longRunningTasksJsonString = Option(JsonHelper.convertScalaObjectToJsonString(
-      criticalPathResult.get.tasks))
   }
 
   // Borrowed from CompressionCodecs in spark
