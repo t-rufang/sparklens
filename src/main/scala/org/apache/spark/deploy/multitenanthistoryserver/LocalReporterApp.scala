@@ -24,7 +24,7 @@ import com.ning.compress.lzf.LZFInputStream
 import com.qubole.sparklens.QuboleJobListener
 import com.qubole.sparklens.analyzer.{AppAnalyzer, CriticalPathResult}
 import com.qubole.sparklens.common.Json4sWrapper
-import com.qubole.sparklens.helper.HDFSConfigHelper
+import com.qubole.sparklens.helper.{CriticalPathResultHelper, HDFSConfigHelper}
 import net.jpountz.lz4.LZ4BlockInputStream
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark._
@@ -35,10 +35,8 @@ import org.xerial.snappy.SnappyInputStream
 object LocalReporterApp {
   lazy val bus = new ReplayListenerBus
   var criticalPathResult: Option[CriticalPathResult] = Option.empty
-  var enableDebug = false
 
-  def reportFromEventHistory(eventFile: String, enableDebug: Boolean = false): Unit = {
-    this.enableDebug = enableDebug
+  def reportFromEventHistory(eventFile: String): Unit = {
     val sparkConf: SparkConf = new SparkConf
     val quboleSparkListener = new QuboleJobListener(sparkConf)
 
@@ -93,5 +91,8 @@ object LocalReporterApp {
     //    val eventLogFile = "/Users/ruifang/Downloads/application_1596531547620_0014_1"
     val eventLogFile = "/Users/ruifang/Downloads/application_1595974271521_0010_1"
     reportFromEventHistory(eventLogFile)
+    println(s"Print debug info\n${criticalPathResult.get.debugInfo}")
+    println(CriticalPathResultHelper.getCriticalPathJsonString(criticalPathResult.get))
+    println(CriticalPathResultHelper.getCriticalPathJsonStringWithoutShortStage(criticalPathResult.get, Option(0.3526)))
   }
 }

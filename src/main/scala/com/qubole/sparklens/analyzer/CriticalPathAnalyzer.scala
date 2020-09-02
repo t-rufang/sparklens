@@ -18,9 +18,7 @@
 package com.qubole.sparklens.analyzer
 
 import com.qubole.sparklens.common.AppContext
-import com.qubole.sparklens.helper.JsonHelper
 import com.qubole.sparklens.timespan.{JobTimeSpan, StageTimeSpan, TaskTimeSpan, TimeSpan}
-import org.apache.spark.deploy.multitenanthistoryserver.LocalReporterApp
 
 import scala.collection.mutable
 
@@ -34,13 +32,12 @@ case class LongRunningTasksData(stageID: Long, tasksData: List[TaskData])
 
 case class CriticalPathResult(criticalPath: List[CriticalPathData],
                               tasks: List[LongRunningTasksData],
-                              criticalPathJsonString: String,
-                              tasksJsonString: String)
+                              debugInfo: String)
 
 class CriticalPathAnalyzer extends AppAnalyzer {
-  val LONG_RUNNING_TASK_DURATION_LOWER_BOUND = 10000 // Lower time bound for long running tasks (millisecond)
-  val LONG_RUNNING_TASK_SKEW_RATIO = 2 // Task duration skew ratio for long running tasks
-  var criticalPathResult = CriticalPathResult(List.empty, List.empty, "", "")
+  val LONG_RUNNING_TASK_DURATION_LOWER_BOUND = 600000 // Lower time bound for long running tasks (millisecond)
+  val LONG_RUNNING_TASK_SKEW_RATIO = 3 // Task duration skew ratio for long running tasks
+  var criticalPathResult = CriticalPathResult(List.empty, List.empty, "")
 
   override def analyze(appContext: AppContext, startTime: Long, endTime: Long): String = {
     val ac = appContext.filterByStartAndEndTime(startTime, endTime)
@@ -48,10 +45,14 @@ class CriticalPathAnalyzer extends AppAnalyzer {
     val longRunningTasks: mutable.HashMap[Long, List[TaskTimeSpan]] = mutable.HashMap.empty
 
     val out = new mutable.StringBuilder()
+    out.println("----------------------------------------DEBUG INFO START----------------------------------------")
+    out.println(s"Original time span for each job:")
+    printTimeSpans(out, ac.jobMap.values.toList.sortBy(_.jobID))
+    out.println(s"Original time span for each stage:")
+    printTimeSpans(out, ac.jobMap.values.flatMap(jobTimeSpan => jobTimeSpan.stageMap.values).toList.sortBy(_.stageID),
+      ac.stageIDToJobID)
+
     out.println("\nCritical path analysis")
-    if (LocalReporterApp.enableDebug) {
-      println(s"job map(filterByStartAndEndTime):\n${ac.jobMap.values.mkString("\n")}\n")
-    }
     ac.jobMap.values.toList.sortBy(_.jobID).foreach(jobTimeSpan => {
       val currentJobCriticalPath = findLongestPathTimeSpans(jobTimeSpan.stageMap.values.toList)
       if (currentJobCriticalPath.nonEmpty) {
@@ -64,7 +65,7 @@ class CriticalPathAnalyzer extends AppAnalyzer {
     out.println(
       s"""
          |Long running tasks analysis
-         |1) Long running task has duration greater than ${LONG_RUNNING_TASK_DURATION_LOWER_BOUND / 1000}s
+         |1) Long running task has duration greater than ${pd(LONG_RUNNING_TASK_DURATION_LOWER_BOUND)}
          |2) Long running task has duration greater than ${LONG_RUNNING_TASK_SKEW_RATIO} * average tasks duration in the stage\n""".stripMargin)
     stageLevelCriticalPath.values.flatten.toList.sortBy(_.stageID).foreach(stageTimeSpan => {
       val currentStageLongRunningTasks = findLongRunningTimeSpans(stageTimeSpan.taskMap.values.toList)
@@ -94,11 +95,11 @@ class CriticalPathAnalyzer extends AppAnalyzer {
           taskTimeSpan.duration().getOrElse(0L)))
       LongRunningTasksData(stageID, tasksData)
     }).toList.sortBy(_.stageID)
-    val criticalPathJsonString = JsonHelper.convertScalaObjectToJsonString(criticalPaths)
-    val tasksJsonString = JsonHelper.convertScalaObjectToJsonString(tasks)
-    criticalPathResult = CriticalPathResult(criticalPaths, tasks, criticalPathJsonString, tasksJsonString)
+    out.println("----------------------------------------DEBUG INFO END----------------------------------------")
+    criticalPathResult = CriticalPathResult(criticalPaths, tasks, out.toString())
 
-    out.toString()
+    // We print nothing by default. If user wants to know detailed info, they can call criticalPathResult.debugInfo
+    ""
   }
 
   def findLongestPathTimeSpans[P <: TimeSpan](timeSpans: List[P]): List[P] = {
@@ -132,12 +133,17 @@ class CriticalPathAnalyzer extends AppAnalyzer {
    *
    * @param timeSpans time spans which constitute the critical path
    */
-  def printTimeSpans[P <: TimeSpan](out: mutable.StringBuilder, timeSpans: List[P]): Unit = {
+  def printTimeSpans[P <: TimeSpan](out: mutable.StringBuilder,
+                                    timeSpans: List[P],
+                                    stageIDToJobID: mutable.HashMap[Int, Long] = new mutable.HashMap[Int, Long]): Unit = {
     timeSpans.foreach(timeSpan => {
       timeSpan match {
         case span: JobTimeSpan =>
           out.print(f"Job ${span.jobID}%3s    ")
         case span: StageTimeSpan => {
+          if (!stageIDToJobID.isEmpty) {
+            out.print(f"Job ${stageIDToJobID(span.stageID)}%3s    ")
+          }
           out.print(f"Stage ${span.stageID}%3s    ")
         }
         case span: TaskTimeSpan => {
