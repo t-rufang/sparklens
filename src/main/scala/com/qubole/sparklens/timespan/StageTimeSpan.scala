@@ -115,6 +115,10 @@ class StageTimeSpan(val stageID: Int, numberOfTasks: Long) extends TimeSpan {
       "taskPeakMemoryUsage" -> taskPeakMemoryUsage.mkString("[", ",", "]")
     ) ++ super.getStartEndTime()
   }
+
+  override def toString: String = {
+    s"stage ID: $stageID, startTime: $startTime, endTime: $endTime"
+  }
 }
 
 object StageTimeSpan {

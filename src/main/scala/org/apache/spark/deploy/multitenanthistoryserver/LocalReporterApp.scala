@@ -35,8 +35,10 @@ import org.xerial.snappy.SnappyInputStream
 object LocalReporterApp {
   lazy val bus = new ReplayListenerBus
   var criticalPathResult: Option[CriticalPathResult] = Option.empty
+  var enableDebug = false
 
-  def reportFromEventHistory(eventFile: String): Unit = {
+  def reportFromEventHistory(eventFile: String, enableDebug: Boolean = false): Unit = {
+    this.enableDebug = enableDebug
     val sparkConf: SparkConf = new SparkConf
     val quboleSparkListener = new QuboleJobListener(sparkConf)
 

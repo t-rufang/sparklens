@@ -20,6 +20,7 @@ package com.qubole.sparklens.analyzer
 import com.qubole.sparklens.common.AppContext
 import com.qubole.sparklens.helper.JsonHelper
 import com.qubole.sparklens.timespan.{JobTimeSpan, StageTimeSpan, TaskTimeSpan, TimeSpan}
+import org.apache.spark.deploy.multitenanthistoryserver.LocalReporterApp
 
 import scala.collection.mutable
 
@@ -48,6 +49,9 @@ class CriticalPathAnalyzer extends AppAnalyzer {
 
     val out = new mutable.StringBuilder()
     out.println("\nCritical path analysis")
+    if (LocalReporterApp.enableDebug) {
+      println(s"job map(filterByStartAndEndTime):\n${ac.jobMap.values.mkString("\n")}\n")
+    }
     ac.jobMap.values.toList.sortBy(_.jobID).foreach(jobTimeSpan => {
       val currentJobCriticalPath = findLongestPathTimeSpans(jobTimeSpan.stageMap.values.toList)
       if (currentJobCriticalPath.nonEmpty) {

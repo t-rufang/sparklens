@@ -90,6 +90,10 @@ class JobTimeSpan(val jobID: Long) extends TimeSpan {
       "jobMetrics" -> jobMetrics.getMap,
       "stageMap" -> AppContext.getMap(stageMap)) ++ super.getStartEndTime()
   }
+
+  override def toString: String = {
+    s"job ID: $jobID, start time: $startTime, end time: $endTime"
+  }
 }
 
 object JobTimeSpan {

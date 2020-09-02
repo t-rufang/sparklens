@@ -27,4 +27,8 @@ class TaskTimeSpan(val taskID: Long, val executorId: String) extends TimeSpan {
       "taskID" -> taskID
     ) ++ super.getStartEndTime()
   }
+
+  override def toString: String = {
+    s"task ID: $taskID, start time: $startTime, end time: $endTime"
+  }
 }
