@@ -101,7 +101,7 @@ class CriticalPathAnalyzer extends AppAnalyzer {
 
     val criticalPathWithAllStages = ac.jobMap.toList.sortBy(_._1).map(item => {
       val jobId = item._1
-      val allStagesInJob = item._2.stageMap.values.toList
+      val allStagesInJob = item._2.stageMap.values.toList.sortBy(_.stageID)
       val stagesData = allStagesInJob.map(stageTimeSpan =>
         StageData(stageTimeSpan.stageID,
           stageTimeSpan.startTime,
