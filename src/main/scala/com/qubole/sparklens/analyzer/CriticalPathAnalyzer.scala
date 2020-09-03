@@ -22,7 +22,7 @@ import com.qubole.sparklens.timespan.{JobTimeSpan, StageTimeSpan, TaskTimeSpan, 
 
 import scala.collection.mutable
 
-case class StageData(stageID: Long, startTime: Long, endTime: Long, duration: Long)
+case class StageData(stageID: Long, startTime: Long, endTime: Long, duration: Long, inCriticalPath: Boolean = true)
 
 case class CriticalPathData(jobID: Long, stagesData: List[StageData])
 
@@ -31,13 +31,15 @@ case class TaskData(taskID: Long, startTime: Long, endTime: Long, duration: Long
 case class LongRunningTasksData(stageID: Long, tasksData: List[TaskData])
 
 case class CriticalPathResult(criticalPath: List[CriticalPathData],
+                              criticalPathWithAllStages: List[CriticalPathData],
                               tasks: List[LongRunningTasksData],
                               debugInfo: String)
 
 class CriticalPathAnalyzer extends AppAnalyzer {
   val LONG_RUNNING_TASK_DURATION_LOWER_BOUND = 600000 // Lower time bound for long running tasks (millisecond)
   val LONG_RUNNING_TASK_SKEW_RATIO = 3 // Task duration skew ratio for long running tasks
-  var criticalPathResult = CriticalPathResult(List.empty, List.empty, "")
+  var criticalPathResult = CriticalPathResult(List.empty, List.empty, List.empty, "")
+  val stageIdsInCriticalPath = new mutable.HashSet[Long]()
 
   override def analyze(appContext: AppContext, startTime: Long, endTime: Long): String = {
     val ac = appContext.filterByStartAndEndTime(startTime, endTime)
@@ -58,6 +60,7 @@ class CriticalPathAnalyzer extends AppAnalyzer {
       if (currentJobCriticalPath.nonEmpty) {
         out.println(s"Critical path for job ${jobTimeSpan.jobID}:")
         printTimeSpans(out, currentJobCriticalPath)
+        currentJobCriticalPath.foreach(stageTimeSpan => stageIdsInCriticalPath.add(stageTimeSpan.stageID))
       }
       stageLevelCriticalPath(jobTimeSpan.jobID) = currentJobCriticalPath
     })
@@ -95,8 +98,21 @@ class CriticalPathAnalyzer extends AppAnalyzer {
           taskTimeSpan.duration().getOrElse(0L)))
       LongRunningTasksData(stageID, tasksData)
     }).toList.sortBy(_.stageID)
+
+    val criticalPathWithAllStages = ac.jobMap.toList.sortBy(_._1).map(item => {
+      val jobId = item._1
+      val allStagesInJob = item._2.stageMap.values.toList
+      val stagesData = allStagesInJob.map(stageTimeSpan =>
+        StageData(stageTimeSpan.stageID,
+          stageTimeSpan.startTime,
+          stageTimeSpan.endTime,
+          stageTimeSpan.duration().getOrElse(0L),
+          stageIdsInCriticalPath.contains(stageTimeSpan.stageID.toLong)
+        ))
+      CriticalPathData(jobId, stagesData)
+    }).sortBy(_.jobID)
     out.println("----------------------------------------DEBUG INFO END----------------------------------------")
-    criticalPathResult = CriticalPathResult(criticalPaths, tasks, out.toString())
+    criticalPathResult = CriticalPathResult(criticalPaths, criticalPathWithAllStages, tasks, out.toString())
 
     // We print nothing by default. If user wants to know detailed info, they can call criticalPathResult.debugInfo
     ""

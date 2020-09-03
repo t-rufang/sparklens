@@ -24,6 +24,10 @@ object CriticalPathResultHelper {
     JsonHelper.convertScalaObjectToJsonString(CriticalPathResult.criticalPath)
   }
 
+  def getCriticalPathWithAllStagesJsonString(criticalPathResult: CriticalPathResult): String = {
+    JsonHelper.convertScalaObjectToJsonString(criticalPathResult.criticalPathWithAllStages)
+  }
+
   def getCriticalPathJsonStringWithoutShortStage(CriticalPathResult: CriticalPathResult,
                                                  durationThreshold: Option[Double] = Option.empty): String = {
     JsonHelper.convertScalaObjectToJsonString(
