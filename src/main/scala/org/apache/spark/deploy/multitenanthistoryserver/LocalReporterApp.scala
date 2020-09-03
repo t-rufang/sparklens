@@ -24,7 +24,7 @@ import com.ning.compress.lzf.LZFInputStream
 import com.qubole.sparklens.QuboleJobListener
 import com.qubole.sparklens.analyzer.{AppAnalyzer, CriticalPathResult}
 import com.qubole.sparklens.common.Json4sWrapper
-import com.qubole.sparklens.helper.{CriticalPathResultHelper, HDFSConfigHelper}
+import com.qubole.sparklens.helper.HDFSConfigHelper
 import net.jpountz.lz4.LZ4BlockInputStream
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark._
@@ -89,10 +89,12 @@ object LocalReporterApp {
   def main(args: Array[String]): Unit = {
     //    val eventLogFile = "/Users/ruifang/Downloads/application_1593167700677_0076_1.inprogress"
     //    val eventLogFile = "/Users/ruifang/Downloads/application_1596531547620_0014_1"
-    val eventLogFile = "/Users/ruifang/Downloads/application_1595974271521_0010_1"
+    val eventLogFile = "/Users/ruifang/Downloads/application_1597747776597_0005_1"
     reportFromEventHistory(eventLogFile)
     println(s"Print debug info\n${criticalPathResult.get.debugInfo}")
-    println(CriticalPathResultHelper.getCriticalPathJsonString(criticalPathResult.get))
-    println(CriticalPathResultHelper.getCriticalPathJsonStringWithoutShortStage(criticalPathResult.get, Option(0.3526)))
+    println(criticalPathResult.get.criticalPathJsonString)
+    println(criticalPathResult.get.criticalPathWithAllStagesJsonString)
+    println(criticalPathResult.get.criticalPathWithoutShortStagesJsonString(Option(0.70735)))
+    println(criticalPathResult.get.jobsTimeLineJsonString)
   }
 }

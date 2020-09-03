@@ -18,9 +18,12 @@
 package com.qubole.sparklens.analyzer
 
 import com.qubole.sparklens.common.AppContext
+import com.qubole.sparklens.helper.JsonHelper
 import com.qubole.sparklens.timespan.{JobTimeSpan, StageTimeSpan, TaskTimeSpan, TimeSpan}
 
 import scala.collection.mutable
+
+case class JobData(jobID: Long, startTime: Long, endTime: Long, duration: Long)
 
 case class StageData(stageID: Long, startTime: Long, endTime: Long, duration: Long, inCriticalPath: Boolean = true)
 
@@ -32,13 +35,44 @@ case class LongRunningTasksData(stageID: Long, tasksData: List[TaskData])
 
 case class CriticalPathResult(criticalPath: List[CriticalPathData],
                               criticalPathWithAllStages: List[CriticalPathData],
+                              jobsTimeLine: List[JobData],
                               tasks: List[LongRunningTasksData],
-                              debugInfo: String)
+                              debugInfo: String) {
+  val criticalPathJsonString = JsonHelper.convertScalaObjectToJsonString(criticalPath)
+  val criticalPathWithAllStagesJsonString = JsonHelper.convertScalaObjectToJsonString(criticalPathWithAllStages)
+  val jobsTimeLineJsonString = JsonHelper.convertScalaObjectToJsonString(jobsTimeLine)
+  val longRunningTasksJsonString = JsonHelper.convertScalaObjectToJsonString(tasks)
+
+  def criticalPathWithoutShortStagesJsonString(durationThreshold: Option[Double] = Option.empty): String =
+    JsonHelper.convertScalaObjectToJsonString(getCriticalPathWithoutShortStage(durationThreshold))
+
+  /**
+   * Filter stages whose duration is shorter than specific value. If all the stages in a job is filtered out,
+   * we will remove the job as well.
+   * If durationThreshold is specified, we will filter out all the stage whose duration is shorter than this value.
+   * Otherwise, we will filter out all the stages whose duration is shorter than average stage duration
+   * than this value.
+   * @param durationThreshold threshold that used to filter out short stages. If durationThreshold is 10, we will filter
+   *                          out all the stages whose duration is shorter than 10 minutes
+   * @return filtered critical path
+   */
+  def getCriticalPathWithoutShortStage(durationThreshold: Option[Double] = Option.empty): List[CriticalPathData] = {
+    val allStages = criticalPath.flatMap(criticalPathData => criticalPathData.stagesData)
+    val averageStageDuration = allStages.map(_.duration).sum / (0.0 + allStages.size)
+    val filterThreshold = if (durationThreshold.isDefined) durationThreshold.get * 60000 else averageStageDuration
+
+    criticalPath.map(criticalPathData => {
+      val jobID = criticalPathData.jobID
+      val filteredStageData = criticalPathData.stagesData.filter(_.duration >= filterThreshold)
+      CriticalPathData(jobID, filteredStageData)
+    }).filter(criticalPathData => criticalPathData.stagesData.nonEmpty)
+  }
+}
 
 class CriticalPathAnalyzer extends AppAnalyzer {
   val LONG_RUNNING_TASK_DURATION_LOWER_BOUND = 600000 // Lower time bound for long running tasks (millisecond)
   val LONG_RUNNING_TASK_SKEW_RATIO = 3 // Task duration skew ratio for long running tasks
-  var criticalPathResult = CriticalPathResult(List.empty, List.empty, List.empty, "")
+  var criticalPathResult = CriticalPathResult(List.empty, List.empty, List.empty, List.empty, "")
   val stageIdsInCriticalPath = new mutable.HashSet[Long]()
 
   override def analyze(appContext: AppContext, startTime: Long, endTime: Long): String = {
@@ -111,8 +145,12 @@ class CriticalPathAnalyzer extends AppAnalyzer {
         ))
       CriticalPathData(jobId, stagesData)
     }).sortBy(_.jobID)
+
+    val jobsTimeLine = ac.jobMap.toList.sortBy(_._1).map(item =>
+      JobData(item._1, item._2.startTime, item._2.endTime, item._2.duration().getOrElse(0L)))
     out.println("----------------------------------------DEBUG INFO END----------------------------------------")
-    criticalPathResult = CriticalPathResult(criticalPaths, criticalPathWithAllStages, tasks, out.toString())
+    criticalPathResult = CriticalPathResult(
+      criticalPaths, criticalPathWithAllStages, jobsTimeLine, tasks, out.toString())
 
     // We print nothing by default. If user wants to know detailed info, they can call criticalPathResult.debugInfo
     ""
